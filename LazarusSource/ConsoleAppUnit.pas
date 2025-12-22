@@ -111,8 +111,12 @@ begin
  //'console' passed as a parameter
  if((Application.HasOption('c','console'))
  or(IsRunFromConsole))
- and(not Application.HasOption('g','gui'))then
- begin
+ {$IFNDEF CONSOLE_ONLY}
+  and(not Application.HasOption('g','gui'))
+ {$ELSE}
+  or(True)
+ {$ENDIF}
+ then begin
   //Windows does not create a console for GUI applications, so we need to
   {$IFDEF Windows}
   //Blank the styles for older versions of Windows
@@ -217,7 +221,9 @@ begin
  Write(MainForm.ApplicationTitle+' Console V'+MainForm.ApplicationVersion);
  WriteLn(' by Gerald J Holdsworth');
  WriteLn();
+ {$IFNDEF CONSOLE_ONLY}
  WriteLn(MainForm.platform+' '+MainForm.arch);
+ {$ENDIF}
  WriteLn(cmdNormal);
  //Did the user supply a file for commands to run?
  OpenScript(Application.GetOptionValue('c','console'));

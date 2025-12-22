@@ -22,7 +22,9 @@ Boston, MA 02110-1335, USA.
 {$MODE objFPC}{$H+}
 
 uses
-  Forms,Interfaces,ConsoleAppUnit,
+  Forms,Interfaces,ConsoleAppUnit
+  {$IFNDEF CONSOLE_ONLY}
+  ,
   MainUnit in 'MainUnit.pas',
   DiscImage in 'DiscImage.pas',
   AboutUnit in 'AboutUnit.pas',
@@ -40,7 +42,9 @@ uses
   AFSPartitionUnit in 'AFSParitionUnit.pas',
   ChangeInterleaveUnit in 'ChangeInterleaveUnit.pas',
   CSVPrefUnit in 'CSVPrefUnit.pas',
-  ImageReportUnit in 'ImageReportUnit.pas', RFSDetailUnit, DiscImageHelper;
+  ImageReportUnit in 'ImageReportUnit.pas', RFSDetailUnit, DiscImageHelper
+  {$ENDIF}
+  ;
 
 {$R *.res}
 
@@ -48,6 +52,9 @@ uses
 Main program execution starts here
 -------------------------------------------------------------------------------}
 begin
+  Application.Scaled:=True;
+  Application.Title:='Disc Image Manager';
+ {$IFNDEF CONSOLE_ONLY}
  //Create GUI application
  RequireDerivedFormResource:=True;
  Application.Scaled:=True;
@@ -78,4 +85,7 @@ begin
   Application.CreateForm(TRFSDetailForm, RFSDetailForm);
   Application.Run; //Open as normal
  end;
+ {$ELSE}
+ CheckConsole;
+ {$ENDIF}
 end.
