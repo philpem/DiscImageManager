@@ -1,0 +1,6 @@
+[submodule "ExternalLibraries/SpriteToBitmap"]
+	path = ExternalLibraries/SpriteToBitmap
+	url = https://github.com/geraldholdsworth/SpriteToBitmap
+[submodule "ExternalLibraries/GJHCustomComponents"]
+	path = ExternalLibraries/GJHCustomComponents
+	url = https://github.com/geraldholdsworth/GJHCustomComponents
