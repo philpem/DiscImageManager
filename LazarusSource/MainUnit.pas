@@ -879,6 +879,30 @@ begin
      if Length(SparkFile.FileList)>bypassGUIThres then bypassGUI:=True;
      //Indicate we will be doing some updating
      Image.BeginUpdate;
+     //Create a directory named after the archive to contain its contents
+     temp:=ChangeFileExt(ExtractFileName(filename),'');
+     //Strip RISC OS filetype suffix (e.g., ',ddc')
+     if(Length(temp)>4)and(temp[Length(temp)-3]=',')then
+      temp:=LeftStr(temp,Length(temp)-4);
+     //Create the directory if it doesn't already exist
+     if not Image.FileExists(ParentDir+Image.DirSep+temp,error,Index) then
+     begin
+      filedetails.Attributes:='D';
+      if bypassGUI then
+       Image.CreateDirectory(temp,ParentDir,filedetails.Attributes)
+      else
+      begin
+       SelectNode(ParentDir);
+       CreateDirectory(temp,filedetails.Attributes);
+      end;
+     end;
+     //Update parent to include the archive directory
+     if Image.FileExists(ParentDir+Image.DirSep+temp,error,Index) then
+     begin
+      ParentDir:=ParentDir+Image.DirSep+temp;
+      //Set the filetype to 'DDC' (Archive) for the icon
+      Image.ChangeFileType(ParentDir,'DDC');
+     end;
      //Counter into the file list
      index:=0;
      //OK flag - so we can stop on an error
@@ -2912,6 +2936,16 @@ begin
    else
     //to a closed one
     ft:=directory;
+   //If directory has a filetype (e.g. archive opened as directory), use it
+   if(not dospart)and(not afspart)then
+    if(ImageToUse.MajorFormatNumber=diAcornADFS)
+    or(ImageToUse.MajorFormatNumber=diSpark)
+    or(ImageToUse.ISOFormatNumber=diAcornADFS)then
+     if filetype<>'' then
+     begin
+      i:=GetFileTypeGraphic(filetype,Low(RISCOSFileTypes),RISCOSFileTypes);
+      if i<>unknown then ft:=i;
+     end;
    //If RISC OS, and an application
    if(not dospart)and(not afspart)then
     if(ImageToUse.MajorFormatNumber=diAcornADFS)
