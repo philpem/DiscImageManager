@@ -54,6 +54,7 @@ type
     function GetDriveSize(const GivenSize: String): Cardinal;
     procedure ShowHelp;
     procedure ListCatalogueEx(const Mode: String);
+    procedure LoadContextSettings;
     // Command handlers
     procedure CmdAccess(const Params: TStringArray);
     procedure CmdAdd(const Params: TStringArray);
@@ -174,6 +175,21 @@ implementation
 
 { TCLICommandProcessor }
 
+procedure TCLICommandProcessor.LoadContextSettings;
+begin
+  FContext.CreateINF            := FSettings.GetBool('CreateINF',            True);
+  FContext.AddImpliedAttributes := FSettings.GetBool('AddImpliedAttributes',  True);
+  FContext.HideDEL              := FSettings.GetBool('Hide_CDR_DEL',          True);
+  FContext.ScanSubDirs          := FSettings.GetBool('Scan_SubDirs',          True);
+  FContext.OpenDOS              := FSettings.GetBool('Open_DOS',              True);
+  FContext.CreateDSC            := FSettings.GetBool('Create_DSC',            False);
+  FContext.DFSZeroSecs          := FSettings.GetBool('DFS_Zero_Sectors',      False);
+  FContext.DFSBeyondEdge        := FSettings.GetBool('DFS_Beyond_Edge',       True);
+  FContext.DFSAllowBlank        := FSettings.GetBool('DFS_Allow_Blanks',      False);
+  FContext.SparkIsFS            := FSettings.GetBool('Spark_Is_FS',           True);
+  FContext.ADFSInterleave       := FSettings.GetInt ('ADFS_L_Interleave',     0);
+end;
+
 constructor TCLICommandProcessor.Create;
 begin
   inherited Create;
@@ -183,6 +199,7 @@ begin
   FOwnsSettings := True;
   FConsoleWidth := 80;
   FUseColors := True;
+  LoadContextSettings;
 end;
 
 constructor TCLICommandProcessor.Create(AContext: TDiscImageContext;
@@ -195,6 +212,7 @@ begin
   FOwnsSettings := False;
   FConsoleWidth := 80;
   FUseColors := True;
+  LoadContextSettings;
 end;
 
 destructor TCLICommandProcessor.Destroy;
@@ -1561,7 +1579,10 @@ begin
         end;
       end;
     if Ok then
+    begin
+      LoadContextSettings;
       WriteLn('Configuration option set.')
+    end
     else
       WriteLnColored('Invalid configuration option.', clRed);
   end
