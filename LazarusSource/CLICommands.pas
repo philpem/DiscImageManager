@@ -2168,7 +2168,7 @@ begin
           Filename := FContext.Image.GetParent(Dir)
                     + FContext.Image.GetDirSep(FContext.Image.Disc[Dir].Partition)
                     + FContext.Image.Disc[Dir].Entries[Entry].Filename;
-          if FContext.Image.GetFileCRC(Filename, Entry) = 'error' then
+          if not FContext.Image.FileIsReadable(Dir, Entry) then
           begin
             WriteLn(Filename + ' could not be read');
             Inc(ErrorCount);

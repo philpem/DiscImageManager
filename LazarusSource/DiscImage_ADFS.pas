@@ -2169,6 +2169,87 @@ begin
 end;
 
 {-------------------------------------------------------------------------------
+Retrieve both byte-offset and bit-offset free space arrays in a single pass.
+Equivalent to calling ADFSGetFreeFragments(True) and ADFSGetFreeFragments(False)
+but scans the map only once.
+-------------------------------------------------------------------------------}
+procedure TDiscImage.ADFSGetFreeFragmentsBoth(var fsm, fsmoff: TFragmentArray;
+                                               whichzone: Integer=-1);
+var
+ zonecounter  : Integer=0;
+ zone         : Cardinal=0;
+ startoffset  : Cardinal=0;
+ startzone    : Cardinal=0;
+ freelink     : Cardinal=0;
+ i            : Cardinal=0;
+ j            : Cardinal=0;
+ k            : Cardinal=0;
+ n            : Integer=0;
+ zonecheck    : array of Boolean=nil;
+begin
+ fsm:=nil; fsmoff:=nil;
+ startzone:=nzones div 2;
+ SetLength(zonecheck,nzones);
+ for i:=0 to nzones-1 do zonecheck[i]:=False;
+ zonecounter:=startzone;
+ startoffset:=0;
+ while startoffset<=Ceil(nzones/2) do
+ begin
+  zone:=zonecounter;
+  i:=ReadBits(bootmap+(zone*secsize)+1,0,15);
+  freelink:=i;
+  if i<>0 then
+  begin
+   repeat
+    if(whichzone=-1)or(whichzone=zone)then
+    begin
+     n:=Length(fsm);
+     SetLength(fsm,n+1); SetLength(fsmoff,n+1);
+     // Byte-offset entry
+     fsm[n].Offset:=i+8+(zone*secsize*8);
+     fsm[n].Offset:=((fsm[n].Offset-$200)-(zone_spare*zone))*bpmb;
+     fsm[n].Zone:=zone;
+     // Bit-offset entry
+     fsmoff[n].Offset:=freelink;
+     fsmoff[n].Zone:=zone;
+    end;
+    freelink:=ReadBits(bootmap+(zone*secsize)+1+(i div 8),i mod 8,idlen);
+    if freelink=0 then j:=i-1 else j:=(i+idlen)-1;
+    repeat
+     inc(j);
+    until(IsBitSet(ReadByte(bootmap+(zone*secsize)+1+(j div 8)),j mod 8))
+       or(j>=24+(secsize*8-zone_spare));
+    if(whichzone=-1)or(whichzone=zone)then
+    begin
+     if j>secsize*8-8 then j:=secsize*8-9;
+     k:=(j-i)+1;
+     n:=Length(fsm)-1;
+     fsm[n].Length:=k*bpmb;
+     fsmoff[n].Length:=k;
+    end;
+    inc(i,freelink);
+   until(freelink=0)or(i>=24+(secsize*8-zone_spare));
+  end;
+  zonecheck[zonecounter]:=True;
+  while(startoffset<=Ceil(nzones/2))and(zonecheck[zonecounter])do
+  begin
+   if zonecounter=startzone-startoffset then
+    if startzone+startoffset<Length(zonecheck) then
+     zonecounter:=startzone+startoffset;
+   if zonecheck[zonecounter] then
+   begin
+    inc(startoffset);
+    zonecounter:=startzone-startoffset;
+    if(zonecounter<0)and(startzone+startoffset<Length(zonecheck))then
+     zonecounter:=startzone+startoffset;
+    if(zonecounter<0)or(zonecounter>=Length(zonecheck))then
+     startoffset:=nzones;
+   end;
+  end;
+ end;
+end;
+
+{-------------------------------------------------------------------------------
 Write a file to ADFS image
 -------------------------------------------------------------------------------}
 function TDiscImage.WriteADFSFile(var file_details: TDirEntry;
@@ -3987,8 +4068,10 @@ var
  frag   : Cardinal=0; //Pointer into the fragment array
 begin
  Result:=False;
- //No fragments have been given, or the file length is zero - we have an error
- if(Length(fragments)>0)and(filelen>0)then
+ //Zero-length files always succeed with an empty buffer
+ if filelen=0 then begin SetLength(buffer,0); Result:=True; exit; end;
+ //No fragments have been given - we have an error
+ if Length(fragments)>0 then
  begin
   SetLength(buffer,filelen);
   dest  :=0;      //Length pointer/Destination pointer
@@ -5086,8 +5169,7 @@ begin
   if CSV then temp:=temp+'"';
   Result.Add(temp);
   if not CSV then Result.Add('--------------------------------------------------------------');
-  fsmoff:=ADFSGetFreeFragments(False);
-  fsm:=ADFSGetFreeFragments;
+  ADFSGetFreeFragmentsBoth(fsm,fsmoff);
   for Zone:=0 to nzones-1 do
    for Index:=0 to Length(fsmoff)-1 do
     if fsm[Index].Zone=Zone then

@@ -97,6 +97,36 @@ begin
 end;
 
 {-------------------------------------------------------------------------------
+Check if a file entry can be read without extracting all its data.
+For ADFS new-map images the bitmap index gives an O(1) answer.
+For zero-length files we always return True.
+For everything else we fall back to a full ExtractFile.
+-------------------------------------------------------------------------------}
+function TDiscImage.FileIsReadable(dir, entry: Integer): Boolean;
+var
+ fpath  : String='';
+ buffer : TDIByteArray=nil;
+ frags  : TFragmentArray=nil;
+begin
+ Result:=False;
+ if (dir<0)or(dir>=Length(Disc)) then exit;
+ if (entry<0)or(entry>=Length(Disc[dir].Entries)) then exit;
+ // Zero-length files are always readable
+ if Disc[dir].Entries[entry].Length=0 then begin Result:=True; exit; end;
+ // ADFS new-map: use pre-built bitmap index for O(1) check
+ if FBitmapIndexValid then
+ begin
+  frags:=NewDiscAddrToOffset(Disc[dir].Entries[entry].Sector);
+  Result:=(Length(frags)>0);
+  exit;
+ end;
+ // Fallback: extract the file and check
+ fpath:=GetParent(dir)+GetDirSep(Disc[dir].Partition)
+        +Disc[dir].Entries[entry].Filename;
+ Result:=ExtractFile(fpath,buffer,entry);
+end;
+
+{-------------------------------------------------------------------------------
 Calculate a CRC-32 for a file
 -------------------------------------------------------------------------------}
 function TDiscImage.GetFileCrc(filename: String;entry:Cardinal=0): String;

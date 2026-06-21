@@ -601,6 +601,8 @@ type
   function UpdateADFSBootOption(option: Byte): Boolean;
   function ADFSGetFreeFragments(offset:Boolean=True;
                                           whichzone:Integer=-1): TFragmentArray;
+  procedure ADFSGetFreeFragmentsBoth(var fsm, fsmoff: TFragmentArray;
+                                      whichzone: Integer=-1);
   function WriteADFSFile(var file_details: TDirEntry;var buffer: TDIByteArray;
                          extend:Boolean=True): Integer;
   function ADFSFindFreeSpace(filelen: Cardinal;
@@ -1013,6 +1015,7 @@ type
                               dirtype:Byte;addheader:Boolean):Boolean; overload;
   function FreeSpace(partition: QWord):QWord;
   function GetDirSep(partition: Byte): Char;
+  function FileIsReadable(dir, entry: Integer): Boolean;
   function GetFileCRC(filename: String;entry:Cardinal=0): String;
   function GetFileMD5(filename: String;entry:Cardinal=0): String;
   function GetFileType(filetype: String): Integer;
