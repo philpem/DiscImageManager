@@ -5,15 +5,23 @@ Identifies an ADFS disc and which type
 -------------------------------------------------------------------------------}
 function TDiscImage.ID_ADFS: Boolean;
 var
- Check0   : Byte=0;
- Check1   : Byte=0;
- Check0a  : Byte=0;
- Check1a  : Byte=0;
- ctr      : Cardinal=0;
- ds       : Cardinal=0;
- dr_size  : Cardinal=0;
- dr_ptr   : Cardinal=0;
- zone     : Cardinal=0;
+ Check0       : Byte=0;
+ Check1       : Byte=0;
+ Check0a      : Byte=0;
+ Check1a      : Byte=0;
+ ctr          : Cardinal=0;
+ ds           : Cardinal=0;
+ dr_size      : Cardinal=0;
+ dr_ptr       : Cardinal=0;
+ zone         : Cardinal=0;
+ badOldMapCk  : Boolean=False; //Old-map sector checksum failed but recovered
+ badZoneCk    : Boolean=False; //New-map zone checksum failed but recovered
+ badCrossZone : Boolean=False; //Cross-zone check failed but recovered
+ badBootBlk   : Boolean=False; //Boot-block checksum failed but recovered
+ badDiscRec   : Boolean=False; //Partial disc-record checksum failed but recovered
+ disc_size_raw: Cardinal=0;    //Cached Read24b($0FC)*$100
+ rootsig_6FB  : String='';     //Cached ReadString($6FB,-4)
+ rootsig_BFB  : String='';     //Cached ReadString($BFB,-4)
 begin
  Result:=False;
  if FFormat=diInvalidImg then
@@ -28,13 +36,22 @@ begin
    //Check for Old Map
    Check0   :=ReadByte($0FF);
    Check1   :=ReadByte($1FF);
-   Check0a  :=ByteCheckSum($0000,$100,False);
-   Check1a  :=ByteCheckSum($0100,$100,False);
+   Check0a      :=ByteCheckSum($0000,$100,False);
+   Check1a      :=ByteCheckSum($0100,$100,False);
+   disc_size_raw:=Read24b($0FC)*$100;
+   rootsig_6FB  :=ReadString($6FB,-4);
+   rootsig_BFB  :=ReadString($BFB,-4);
    //Do the checksums on both sectors
-   if  (Check0a=Check0)
-   and (Check1a=Check1) then
+   if ((Check0a=Check0)and(Check1a=Check1))
+   or (FAllowDamagedADFS
+      and(disc_size_raw>0)
+      and(disc_size_raw<=GetDataLength)
+      and((rootsig_6FB='Hugo')
+         or(rootsig_6FB='Nick')
+         or(rootsig_BFB='Nick')))then
    begin
-    //Checks are successful, now find out which type of disc: S/M/L/D
+    if not((Check0a=Check0)and(Check1a=Check1))then badOldMapCk:=True;
+    //Checks are successful (or recovered), now find out which type: S/M/L/D
     Result:=True;
     //FFormat:=$1F; //Default to ADFS Hard drive
     FMap:=False;  //Set to old map
@@ -49,7 +66,7 @@ begin
      FDirType:=diADFSNewDir; //So, old map, new directory must be ADFS D
      FFormat:=diAcornADFS<<4+$03;
     end;
-    disc_size[0]:=Read24b($0FC)*$100;
+    disc_size[0]:=disc_size_raw;
     //The above checks will pass through if the first 512 bytes are all zeros,
     //meaning a, e.g., Commodore 64 image will be IDed as an ADFS Old Map.
     //So, we need to check the disc size is not zero also.
@@ -187,23 +204,109 @@ begin
        Check0:=ReadByte(bootmap+zone*secsize+$00);
        //CrossCheck checksum
        Check1:=Check1 XOR ReadByte(bootmap+zone*secsize+$03);
-       //Check failed, reset format
+       //Check failed; keep searching for a clean match
        if Check0<>GeneralChecksum(bootmap+zone*secsize,
                                   secsize,secsize+4,$4,true) then
+       begin
         Result:=False;
+        if FAllowDamagedADFS then badZoneCk:=True;
+       end;
       end;
       //Cross zone check - should be $FF
       if Check1<>$FF then
+      begin
        Result:=False;
+       if FAllowDamagedADFS then badCrossZone:=True;
+      end;
      end;
      //Check the bootblock checksum
      if (ctr>0) and (Result) then
      begin
       Check0:=ReadByte($0C00+$1FF);
-      if ByteChecksum($0C00,$200,True)<>Check0 then Result:=False;
+      if ByteChecksum($0C00,$200,True)<>Check0 then
+      begin
+       if not FAllowDamagedADFS then Result:=False
+       else badBootBlk:=True;
+      end;
      end;
      inc(ctr);
     until (Result) or (ctr=3);
+    //If no clean result found but damage was tolerated, try each disc record
+    //location from most specific (emulator-header+boot-block) to least,
+    //accepting the first whose disc record values pass a plausibility check.
+    //This avoids being misled by garbage bytes at earlier ctr offsets.
+    if(not Result)and FAllowDamagedADFS and(badZoneCk or badCrossZone)then
+    begin
+     //ctr=2: emulator 512-byte header + boot-block disc record at $0DC0
+     emuheader:=$0200; dr_ptr:=$0DC0;
+     if emuheader+dr_ptr+$40<GetDataLength then
+     begin
+      secsize      :=1 shl ReadByte(dr_ptr+$00);
+      secspertrack :=ReadByte(dr_ptr+$01);
+      heads        :=ReadByte(dr_ptr+$02);
+      idlen        :=ReadByte(dr_ptr+$04);
+      bpmb         :=1 shl ReadByte(dr_ptr+$05);
+      nzones       :=ReadByte(dr_ptr+$09)+ReadByte(dr_ptr+$2A)*$100;
+      zone_spare   :=Read16b(dr_ptr+$0A);
+      rootfrag     :=Read32b(dr_ptr+$0C);
+      root_size    :=Read32b(dr_ptr+$30);
+      if root_size=0 then root_size:=$800;
+     end;
+     if nzones>2 then zone:=dr_size*8 else zone:=0;
+     bootmap:=((nzones div 2)*(8*secsize-zone_spare)-zone)*bpmb;
+     if(secsize>=256)and((secsize and (secsize-1))=0)   //power-of-2, >=256
+     and(nzones>0)                                       //must have at least one zone
+     and(emuheader+bootmap+nzones*secsize<GetDataLength)then
+     begin ctr:=3; Result:=True; end;
+     //ctr=1: raw disc with boot-block disc record at $0DC0 (no emulator header)
+     if not Result then
+     begin
+      emuheader:=0; dr_ptr:=$0DC0;
+      if emuheader+dr_ptr+$40<GetDataLength then
+      begin
+       secsize      :=1 shl ReadByte(dr_ptr+$00);
+       secspertrack :=ReadByte(dr_ptr+$01);
+       heads        :=ReadByte(dr_ptr+$02);
+       idlen        :=ReadByte(dr_ptr+$04);
+       bpmb         :=1 shl ReadByte(dr_ptr+$05);
+       nzones       :=ReadByte(dr_ptr+$09)+ReadByte(dr_ptr+$2A)*$100;
+       zone_spare   :=Read16b(dr_ptr+$0A);
+       rootfrag     :=Read32b(dr_ptr+$0C);
+       root_size    :=Read32b(dr_ptr+$30);
+       if root_size=0 then root_size:=$800;
+      end;
+      if nzones>2 then zone:=dr_size*8 else zone:=0;
+      bootmap:=((nzones div 2)*(8*secsize-zone_spare)-zone)*bpmb;
+      if(secsize>=256)and((secsize and (secsize-1))=0)
+      and(nzones>0)
+      and(emuheader+bootmap+nzones*secsize<GetDataLength)then
+      begin ctr:=2; Result:=True; end;
+     end;
+     //ctr=0: ADFS E with internal disc record at $0004 (no boot block)
+     if not Result then
+     begin
+      emuheader:=0; dr_ptr:=$0004;
+      if emuheader+dr_ptr+$40<GetDataLength then
+      begin
+       secsize      :=1 shl ReadByte(dr_ptr+$00);
+       secspertrack :=ReadByte(dr_ptr+$01);
+       heads        :=ReadByte(dr_ptr+$02);
+       idlen        :=ReadByte(dr_ptr+$04);
+       bpmb         :=1 shl ReadByte(dr_ptr+$05);
+       nzones       :=ReadByte(dr_ptr+$09)+ReadByte(dr_ptr+$2A)*$100;
+       zone_spare   :=Read16b(dr_ptr+$0A);
+       rootfrag     :=Read32b(dr_ptr+$0C);
+       root_size    :=Read32b(dr_ptr+$30);
+       if root_size=0 then root_size:=$800;
+      end;
+      if nzones>2 then zone:=dr_size*8 else zone:=0;
+      bootmap:=((nzones div 2)*(8*secsize-zone_spare)-zone)*bpmb;
+      if(secsize>=256)and((secsize and (secsize-1))=0)
+      and(nzones>0)
+      and(emuheader+bootmap+nzones*secsize<GetDataLength)then
+      begin ctr:=1; Result:=True; end;
+     end;
+    end;
     if Result then
     begin
      case ctr of
@@ -216,7 +319,11 @@ begin
      begin
       Check0 :=ByteChecksum($C00,$200,True);
       Check0a:=ReadByte($DFF);
-      if Check0<>Check0a then FFormat:=diInvalidImg; //Checksums do not match
+      if Check0<>Check0a then
+      begin
+       if not FAllowDamagedADFS then FFormat:=diInvalidImg //Checksums do not match
+       else badDiscRec:=True;
+      end;
      end;
     end;
     //Check for type of directory, and change the format if necessary
@@ -260,7 +367,16 @@ begin
   end;
   //Return a true or false
   Result:=GetMajorFormatNumber=diAcornADFS;
-  if Result then root_name:='$';
+  if Result then
+  begin
+   root_name:='$';
+   //Log any damage detected during identification (after format is confirmed)
+   if badOldMapCk  then LogDamage('ADFS: old-map sector checksum failed, accepted on structural evidence (recovered)');
+   if badZoneCk    then LogDamage('ADFS: new-map zone checksum failed (recovered)');
+   if badCrossZone then LogDamage('ADFS: cross-zone check failed (recovered)');
+   if badBootBlk   then LogDamage('ADFS: boot block checksum failed (recovered)');
+   if badDiscRec   then LogDamage('ADFS: partial disc-record checksum failed (recovered)');
+  end;
  end;
 end;
 
@@ -613,7 +729,11 @@ begin
    Result.Broken:=True;
   end;
  end;
- if Result.Broken then inc(brokendircount);
+ if Result.Broken then
+ begin
+  inc(brokendircount);
+  LogDamage('ADFS: broken directory "'+dirname+'" (error $'+IntToHex(Result.ErrorCode,2)+')');
+ end;
 end;
 
 {-------------------------------------------------------------------------------
@@ -684,9 +804,10 @@ begin
  end;
  if FDirType<diADFSBigDir then  //Old or New Directory
  begin
-  //Count the number of entries
+  //Count the number of entries; cap to prevent infinite loop on corrupt data
   numentrys:=0;
-  while ReadByte(sector+$05+numentrys*$1A,buffer)<>0 do inc(numentrys);
+  while(numentrys<(dirsize-$05)div$1A)
+   and(ReadByte(sector+$05+numentrys*$1A,buffer)<>0)do inc(numentrys);
   EndOfChk:=numentrys*$1A+$05;
  end;
  if FDirType=diADFSBigDir then  //Big Directory
@@ -862,7 +983,11 @@ begin
    end;
    //Slow path: scan the allocation map zone by zone
    //First we need to know how many ids per zone there are (max)
-   id_per_zone:=((secsize*8)-zone_spare)div(idlen+1);
+   if secsize*8>zone_spare then
+    id_per_zone:=((secsize*8)-zone_spare)div(idlen+1)
+   else
+    id_per_zone:=0;
+   if id_per_zone=0 then begin SetLength(Result,0); exit; end;
    //Then work out the start zone
    start_zone:=((addr DIV $100)mod(1<<idlen))div id_per_zone;
    //This is because the first fragment of an object does not necessarily
@@ -1016,6 +1141,9 @@ end;
 Read ADFS Disc
 -------------------------------------------------------------------------------}
 function TDiscImage.ReadADFSDisc: Boolean;
+var
+ savedDmgCount : Integer=0;
+ savedDmgFlag  : Boolean=False;
  function ReadTheADFSDisc: Boolean;
  type
    TVisit = record
@@ -1058,9 +1186,33 @@ function TDiscImage.ReadADFSDisc: Boolean;
    until(d=(disc_size[0]div$100)-1)or(root>0);
    if root=0 then //Failed to find root, so reset the format
    begin
-    ResetVariables;
-    //Now, let's see if it is an AFS
-    if ID_AFS then exit else ResetVariables;
+    if FAllowDamagedADFS then
+    begin
+     //Best-effort: use sector 2 as a conventional root location
+     root:=2;
+     LogDamage('ADFS: root directory not found; using sector 2 as conventional location');
+     //Provide setup that the else branch would have given
+     if FDirType=diADFSNewDir then root_size:=$800;
+     OldName0:=ReadString($0F7,-5);
+     OldName1:=ReadString($1F6,-5);
+     disc_name[0]:='          ';
+     if not FAFSPresent then
+     begin
+      if Length(OldName0)>0 then
+       for d:=1 to Length(OldName0) do
+        disc_name[0][(d*2)-1]:=chr(ord(OldName0[d])AND$7F);
+      if Length(OldName1)>0 then
+       for d:=1 to Length(OldName1) do
+        disc_name[0][ d*2   ]:=chr(ord(OldName1[d])AND$7F);
+      RemoveSpaces(disc_name[0]);
+     end else disc_name[0]:='AFS L3';
+    end
+    else
+    begin
+     ResetVariables;
+     //Now, let's see if it is an AFS
+     if ID_AFS then exit else ResetVariables;
+    end;
    end
    else
    begin
@@ -1143,7 +1295,12 @@ function TDiscImage.ReadADFSDisc: Boolean;
       if addr[d].Offset>bootmap then root:=addr[d].Offset;
    end;
    //Failed to find, so resort to where we expect to find it
-   if root=0 then root:=bootmap+(nzones*secsize*2);
+   if root=0 then
+   begin
+    root:=bootmap+(nzones*secsize*2);
+    if FAllowDamagedADFS then
+     LogDamage('ADFS: root fragment not located; using conventional offset');
+   end;
    //Update the Format, now we know the disc size
    if disc_size[0]>1638400 then FFormat:=diAcornADFS<<4+$0F;
    //Make the disc title easier to work with
@@ -1215,6 +1372,9 @@ begin
  Result:=False;
  if GetMajorFormatNumber=diAcornADFS then //But only if the format is ADFS
  begin
+  //Snapshot ID_ADFS damage messages so retries don't wipe or duplicate them
+  savedDmgCount:=Length(FDamageReport);
+  savedDmgFlag:=FDamaged;
   //Read in the disc
   Result:=ReadTheADFSDisc;
   //Is this an ADFS L with automatic interleave detection?
@@ -1226,6 +1386,9 @@ begin
     //Try next setting
     inc(Finterleave);
     if Finterleave=4 then Finterleave:=1; //Wrap around
+    //Restore to the ID_ADFS baseline before each retry
+    SetLength(FDamageReport,savedDmgCount);
+    FDamaged:=savedDmgFlag;
     //Read in the disc, this time with the new interleave setting
     Result:=ReadTheADFSDisc;
    until(brokendircount=0)or(Finterleave=2);//Until we get back to the start
@@ -2003,6 +2166,87 @@ begin
   end;
  end;
  Result:=fragments;
+end;
+
+{-------------------------------------------------------------------------------
+Retrieve both byte-offset and bit-offset free space arrays in a single pass.
+Equivalent to calling ADFSGetFreeFragments(True) and ADFSGetFreeFragments(False)
+but scans the map only once.
+-------------------------------------------------------------------------------}
+procedure TDiscImage.ADFSGetFreeFragmentsBoth(var fsm, fsmoff: TFragmentArray;
+                                               whichzone: Integer=-1);
+var
+ zonecounter  : Integer=0;
+ zone         : Cardinal=0;
+ startoffset  : Cardinal=0;
+ startzone    : Cardinal=0;
+ freelink     : Cardinal=0;
+ i            : Cardinal=0;
+ j            : Cardinal=0;
+ k            : Cardinal=0;
+ n            : Integer=0;
+ zonecheck    : array of Boolean=nil;
+begin
+ fsm:=nil; fsmoff:=nil;
+ startzone:=nzones div 2;
+ SetLength(zonecheck,nzones);
+ for i:=0 to nzones-1 do zonecheck[i]:=False;
+ zonecounter:=startzone;
+ startoffset:=0;
+ while startoffset<=Ceil(nzones/2) do
+ begin
+  zone:=zonecounter;
+  i:=ReadBits(bootmap+(zone*secsize)+1,0,15);
+  freelink:=i;
+  if i<>0 then
+  begin
+   repeat
+    if(whichzone=-1)or(whichzone=zone)then
+    begin
+     n:=Length(fsm);
+     SetLength(fsm,n+1); SetLength(fsmoff,n+1);
+     // Byte-offset entry
+     fsm[n].Offset:=i+8+(zone*secsize*8);
+     fsm[n].Offset:=((fsm[n].Offset-$200)-(zone_spare*zone))*bpmb;
+     fsm[n].Zone:=zone;
+     // Bit-offset entry
+     fsmoff[n].Offset:=freelink;
+     fsmoff[n].Zone:=zone;
+    end;
+    freelink:=ReadBits(bootmap+(zone*secsize)+1+(i div 8),i mod 8,idlen);
+    if freelink=0 then j:=i-1 else j:=(i+idlen)-1;
+    repeat
+     inc(j);
+    until(IsBitSet(ReadByte(bootmap+(zone*secsize)+1+(j div 8)),j mod 8))
+       or(j>=24+(secsize*8-zone_spare));
+    if(whichzone=-1)or(whichzone=zone)then
+    begin
+     if j>secsize*8-8 then j:=secsize*8-9;
+     k:=(j-i)+1;
+     n:=Length(fsm)-1;
+     fsm[n].Length:=k*bpmb;
+     fsmoff[n].Length:=k;
+    end;
+    inc(i,freelink);
+   until(freelink=0)or(i>=24+(secsize*8-zone_spare));
+  end;
+  zonecheck[zonecounter]:=True;
+  while(startoffset<=Ceil(nzones/2))and(zonecheck[zonecounter])do
+  begin
+   if zonecounter=startzone-startoffset then
+    if startzone+startoffset<Length(zonecheck) then
+     zonecounter:=startzone+startoffset;
+   if zonecheck[zonecounter] then
+   begin
+    inc(startoffset);
+    zonecounter:=startzone-startoffset;
+    if(zonecounter<0)and(startzone+startoffset<Length(zonecheck))then
+     zonecounter:=startzone+startoffset;
+    if(zonecounter<0)or(zonecounter>=Length(zonecheck))then
+     startoffset:=nzones;
+   end;
+  end;
+ end;
 end;
 
 {-------------------------------------------------------------------------------
@@ -3824,8 +4068,10 @@ var
  frag   : Cardinal=0; //Pointer into the fragment array
 begin
  Result:=False;
- //No fragments have been given, or the file length is zero - we have an error
- if(Length(fragments)>0)and(filelen>0)then
+ //Zero-length files always succeed with an empty buffer
+ if filelen=0 then begin SetLength(buffer,0); Result:=True; exit; end;
+ //No fragments have been given - we have an error
+ if Length(fragments)>0 then
  begin
   SetLength(buffer,filelen);
   dest  :=0;      //Length pointer/Destination pointer
@@ -4905,6 +5151,7 @@ begin
  Result.Add('Free Space: '+IntToStr(free_space[0])+' bytes');
  Result.Add('Cylinders: '+IntToStr(Length(free_space_map[0])));
  Result.Add('Broken Directory Count: '+IntToStr(brokendircount));
+ Result.Add('Damaged Filesystem: '+BoolToStr(FDamaged,'Yes','No'));
  if not CSV then Result.Add('');
  Result.Add('Free Space Map');
  if not CSV then Result.Add('==============');
@@ -4922,8 +5169,7 @@ begin
   if CSV then temp:=temp+'"';
   Result.Add(temp);
   if not CSV then Result.Add('--------------------------------------------------------------');
-  fsmoff:=ADFSGetFreeFragments(False);
-  fsm:=ADFSGetFreeFragments;
+  ADFSGetFreeFragmentsBoth(fsm,fsmoff);
   for Zone:=0 to nzones-1 do
    for Index:=0 to Length(fsmoff)-1 do
     if fsm[Index].Zone=Zone then

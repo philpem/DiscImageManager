@@ -126,9 +126,10 @@ const
   Interleaves: array[0..3] of String = ('auto', 'seq', 'int', 'mux');
 
   // Configuration settings (registry) - matches GUI's Configs array
-  Configs: array[0..42] of array[0..2] of String = (
+  Configs: array[0..43] of array[0..2] of String = (
     ('AddImpliedAttributes' ,'B','Add Implied Attributes for DFS/CFS/RFS'),
     ('ADFS_L_Interleave'    ,'I','0=Automatic; 1=Sequential; 2=Interleave; 3=Multiplex'),
+    ('Allow_Damaged_ADFS'   ,'B','Tolerate ADFS filesystem corruption and recover what is possible'),
     ('Create_DSC'           ,'B','Create *.dsc file with hard drives'),
     ('CreateINF'            ,'B','Create a *.inf file when extracting'),
     ('CSVAddress'           ,'B','Include the disc address in CSV file'),
@@ -188,6 +189,7 @@ begin
   FContext.DFSAllowBlank        := FSettings.GetBool('DFS_Allow_Blanks',      False);
   FContext.SparkIsFS            := FSettings.GetBool('Spark_Is_FS',           True);
   FContext.ADFSInterleave       := FSettings.GetInt ('ADFS_L_Interleave',     0);
+  FContext.AllowDamagedADFS     := FSettings.GetBool('Allow_Damaged_ADFS',    False);
 end;
 
 constructor TCLICommandProcessor.Create;
@@ -1253,6 +1255,10 @@ begin
   begin
     WriteColored(FContext.Image.FormatString, clBold);
     WriteLn(' image read OK.');
+    if FContext.Image.Damaged then
+    begin
+      WriteLnColored('WARNING: damaged filesystem detected - use "report" for details.',clRed);
+    end;
     FContext.CurrentDir := 0;
     ReportFreeSpace;
   end
@@ -2162,7 +2168,7 @@ begin
           Filename := FContext.Image.GetParent(Dir)
                     + FContext.Image.GetDirSep(FContext.Image.Disc[Dir].Partition)
                     + FContext.Image.Disc[Dir].Entries[Entry].Filename;
-          if FContext.Image.GetFileCRC(Filename, Entry) = 'error' then
+          if not FContext.Image.FileIsReadable(Dir, Entry) then
           begin
             WriteLn(Filename + ' could not be read');
             Inc(ErrorCount);

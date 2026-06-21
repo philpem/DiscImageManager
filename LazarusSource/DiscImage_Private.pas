@@ -67,6 +67,31 @@ begin
  Fversion      :='';
  SetLength(FBitmapIndex,0);
  FBitmapIndexValid:=False;
+ FDamaged      :=False;
+ SetLength(FDamageReport,0);
+end;
+
+{-------------------------------------------------------------------------------
+Record a damage message and set the Damaged flag
+-------------------------------------------------------------------------------}
+procedure TDiscImage.LogDamage(const msg: String);
+begin
+ FDamaged:=True;
+ SetLength(FDamageReport,Length(FDamageReport)+1);
+ FDamageReport[Length(FDamageReport)-1]:=msg;
+end;
+
+function TDiscImage.GetDamageReportCount: Integer;
+begin
+ Result:=Length(FDamageReport);
+end;
+
+function TDiscImage.GetDamageReportLine(index: Integer): String;
+begin
+ if (index>=0) and (index<Length(FDamageReport)) then
+  Result:=FDamageReport[index]
+ else
+  Result:='';
 end;
 
 {-------------------------------------------------------------------------------

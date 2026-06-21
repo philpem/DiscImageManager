@@ -414,7 +414,9 @@ type
   FOpenDOSPart,                 //Open DOS Partitions on ADFS
   FcreateDSC,                   //Create *.dsc files with ADFS hard drives
   FDOSUseSFN,                   //Use short filenames, even if there are long filenames (DOS)
-  FHasDirs      : Boolean;      //Format is directory capable
+  FHasDirs,                     //Format is directory capable
+  FAllowDamagedADFS,            //Attempt to recover data from a damaged ADFS image
+  FDamaged      : Boolean;      //Set when damage is detected during image read
   secsize,                      //Sector Size
   bpmb,                         //Bits Per Map Bit (Acorn ADFS New)
   dosalloc,                     //Allocation Unit (DOS Plus)
@@ -475,6 +477,7 @@ type
   disc_size,                    //Disc size per partition
   free_space    : array of QWord;//Free space per partition
   disc_name     : array of String;//Disc title(s)
+  FDamageReport : array of String;//Human-readable damage messages (when Damaged=True)
   bootoption    : TDIByteArray; //Boot Option(s)
   FilesData     : array of TDIByteArray;//All the data for CFS or Spark files
   FProgress     : TProgressProc;//Used for feedback
@@ -491,6 +494,9 @@ type
   Frfscopyright : String;       //Copyright string for ROM FS
   //Private methods
   procedure ResetVariables;
+  procedure LogDamage(const msg: String);
+  function  GetDamageReportCount: Integer;
+  function  GetDamageReportLine(index: Integer): String;
   procedure AddPartition;
   function ReadString(ptr,term: Integer;control: Boolean=True): String;
   function ReadString(ptr,term: Integer;var buffer: TDIByteArray;
@@ -595,6 +601,8 @@ type
   function UpdateADFSBootOption(option: Byte): Boolean;
   function ADFSGetFreeFragments(offset:Boolean=True;
                                           whichzone:Integer=-1): TFragmentArray;
+  procedure ADFSGetFreeFragmentsBoth(var fsm, fsmoff: TFragmentArray;
+                                      whichzone: Integer=-1);
   function WriteADFSFile(var file_details: TDirEntry;var buffer: TDIByteArray;
                          extend:Boolean=True): Integer;
   function ADFSFindFreeSpace(filelen: Cardinal;
@@ -1007,6 +1015,7 @@ type
                               dirtype:Byte;addheader:Boolean):Boolean; overload;
   function FreeSpace(partition: QWord):QWord;
   function GetDirSep(partition: Byte): Char;
+  function FileIsReadable(dir, entry: Integer): Boolean;
   function GetFileCRC(filename: String;entry:Cardinal=0): String;
   function GetFileMD5(filename: String;entry:Cardinal=0): String;
   function GetFileType(filetype: String): Integer;
@@ -1055,9 +1064,13 @@ type
                                               write FAddImpliedAttributes;
   property AFSPresent:          Boolean       read FAFSPresent;
   property AFSRoot:             Cardinal      read Fafsroot;
+  property AllowDamagedADFS:    Boolean       read FAllowDamagedADFS
+                                              write FAllowDamagedADFS;
   property AllowDFSZeroSectors: Boolean       read FDFSzerosecs
                                               write FDFSzerosecs;
   property Copyright:           String        read Fcopyright;
+  property Damaged:             Boolean       read FDamaged;
+  property DamageReportCount:   Integer       read GetDamageReportCount;
   property DFSBeyondEdge:       Boolean       read FDFSBeyondEdge
                                               write FDFSBeyondEdge;
   property DFSAllowBlanks:      Boolean       read FDFSAllowBlank
@@ -1124,6 +1137,7 @@ type
                                               write SetRFSVersionNumber;
   property VersionString:       String        read Fversion;
  public
+  property DamageReportLine[index: Integer]: String read GetDamageReportLine;
   destructor Destroy; override;
  End;
 

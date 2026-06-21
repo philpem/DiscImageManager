@@ -32,6 +32,8 @@ begin
  FDOSUseSFN           :=False;
  //Open DOS Partitions on ADFS
  FOpenDOSPart         :=True;
+ //Attempt to recover data from damaged ADFS images
+ FAllowDamagedADFS    :=False;
  //Add implied attributes for DFS/CFS/RFS
  FAddImpliedAttributes:=True;
  //Set the titles
@@ -67,6 +69,8 @@ begin
  FDOSUseSFN           :=Clone.FDOSUseSFN;
  //Open DOS Partitions on ADFS
  FOpenDOSPart         :=Clone.OpenDOSPartitions;
+ //Attempt to recover data from damaged ADFS images
+ FAllowDamagedADFS    :=Clone.AllowDamagedADFS;
  //Add implied attributes for DFS/CFS/RFS
  FAddImpliedAttributes:=Clone.AddImpliedAttributes;
  //Set the titles
@@ -90,6 +94,36 @@ destructor TDiscImage.Destroy;
 begin
  Close;
  inherited;
+end;
+
+{-------------------------------------------------------------------------------
+Check if a file entry can be read without extracting all its data.
+For ADFS new-map images the bitmap index gives an O(1) answer.
+For zero-length files we always return True.
+For everything else we fall back to a full ExtractFile.
+-------------------------------------------------------------------------------}
+function TDiscImage.FileIsReadable(dir, entry: Integer): Boolean;
+var
+ fpath  : String='';
+ buffer : TDIByteArray=nil;
+ frags  : TFragmentArray=nil;
+begin
+ Result:=False;
+ if (dir<0)or(dir>=Length(Disc)) then exit;
+ if (entry<0)or(entry>=Length(Disc[dir].Entries)) then exit;
+ // Zero-length files are always readable
+ if Disc[dir].Entries[entry].Length=0 then begin Result:=True; exit; end;
+ // ADFS new-map: use pre-built bitmap index for O(1) check
+ if FBitmapIndexValid then
+ begin
+  frags:=NewDiscAddrToOffset(Disc[dir].Entries[entry].Sector);
+  Result:=(Length(frags)>0);
+  exit;
+ end;
+ // Fallback: extract the file and check
+ fpath:=GetParent(dir)+GetDirSep(Disc[dir].Partition)
+        +Disc[dir].Entries[entry].Filename;
+ Result:=ExtractFile(fpath,buffer,entry);
 end;
 
 {-------------------------------------------------------------------------------
@@ -1963,6 +1997,22 @@ begin
   if report.Count>0 then
    for side:=0 to report.Count-1 do Result.Add(report[side]);
   report.Free;
+  //Append damage messages, if any
+  if FDamaged then
+  begin
+   if not CSV then
+   begin
+    Result.Add('');
+    Result.Add('Damaged Filesystem');
+    Result.Add('==================');
+   end;
+   for side:=0 to Length(FDamageReport)-1 do
+    if CSV then
+     Result.Add('"Damage","'
+               +StringReplace(FDamageReport[side],'"','""',[])+'"')
+    else
+     Result.Add('Damage: '+FDamageReport[side]);
+  end;
   //Re-jig the output if CSV has been specified
   if(CSV)and(Result.Count>0)then
    for side:=0 to Result.Count-1 do

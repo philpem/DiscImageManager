@@ -72,7 +72,8 @@ type
   CompressUEF,
   ScanSubDirs,
   OpenDOS,
-  CreateDSC: TRISCOSTickBox;
+  CreateDSC,
+  AllowDamagedADFS: TRISCOSTickBox;
   CancelButton,
   OKButton: TRISCOSButton;
   procedure FormCreate(Sender: TObject);
@@ -126,6 +127,7 @@ begin
  ScanSubDirs.NativeOS           :=MainForm.Fstyling=MainForm.NativeStyle;
  OpenDOS.NativeOS               :=MainForm.Fstyling=MainForm.NativeStyle;
  CreateDSC.NativeOS             :=MainForm.Fstyling=MainForm.NativeStyle;
+ AllowDamagedADFS.NativeOS      :=MainForm.Fstyling=MainForm.NativeStyle;
  //Re-align the buttons
  CancelButton.Top     :=OKButton.Top+(OKButton.Height-CancelButton.Height)div 2;
  TilePictureRO5.Picture.Bitmap   :=MainForm.GetTextureTile(1);
@@ -295,7 +297,10 @@ begin
  CreateDSC:=CreateTickBox('Create *.dsc files with new ADFS HDD',MiscPanel);
  CreateDSC.Top:=OpenDOS.Top+OpenDOS.Height+Round(4*ratio);
  CreateDSC.Left:=OpenDOS.Left;
- MiscPanel.Height:=CompressUEF.Top+CompressUEF.Height+Round(8*ratio);
+ AllowDamagedADFS:=CreateTickBox('Tolerate damaged ADFS images',MiscPanel);
+ AllowDamagedADFS.Top:=CreateDSC.Top+CreateDSC.Height+Round(4*ratio);
+ AllowDamagedADFS.Left:=CreateDSC.Left;
+ MiscPanel.Height:=AllowDamagedADFS.Top+AllowDamagedADFS.Height+Round(8*ratio);
  //Move the panels up/down
  styleType.Top:=TexturePanel.Top+TexturePanel.Height;
  DFSPanel.Top:=styleType.Top+styleType.Height;
