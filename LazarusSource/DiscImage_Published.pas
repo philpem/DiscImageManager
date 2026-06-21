@@ -12,6 +12,12 @@ begin
 // SetLength(Fpartitions,0);
  //ADFS Interleaving option
  FForceInter          :=0;
+ //Stream images at/above this size rather than loading them all into RAM
+ FStreamThreshold     :=diStreamThreshold;
+ //No streamed backing store yet
+ FBackStream          :=nil;
+ FStreamed            :=False;
+ FBackTemp            :='';
  //Deal with Spark archives as a filing system (i.e. in this class)
  FSparkAsFS           :=True;
  //Allow DFS images which report number of sectors as zero
@@ -165,6 +171,8 @@ begin
  //Clear any previous load error (not reset by ResetVariables so it survives
  //the ResetVariables call inside IDImage)
  FLoadError:='';
+ //Release any backing store left over from a previous load
+ CloseStream;
  //Only read the file in if it actually exists (or rather, Windows can find it)
  if SysUtils.FileExists(filename) then
  begin
@@ -174,8 +182,18 @@ begin
   if GetMajorFormatNumber=diSpark then SparkFile.Free;
   //Blank off the variables
   ResetVariables;
-  //Read the file in, uncompressing if need be
-  FData:=Inflate(filename);
+  //Large, uncompressed images are streamed from disc on demand rather than
+  //loaded entirely into RAM (which would exhaust memory and overflow the
+  //32-bit addressing). Compressed images can't be streamed by offset, so
+  //they still go through Inflate.
+  if(not FileStartsGZip(filename))and ShouldStream(SizeOfFile(filename))then
+  begin
+   if not OpenStreamed(filename)then
+    FLoadError:='Unable to open the image for streamed access.';
+  end
+  else
+   //Read the file in, uncompressing if need be
+   FData:=Inflate(filename);
   //ID the image
   if(IDImage)and(readdisc)then ReadImage;
   //Return a true or false, depending on if FFormat is set.
@@ -291,6 +309,12 @@ var
  end;
 begin
  Result:=False;
+ //Streamed images are read-only and hold no in-RAM copy to save
+ if FStreamed then
+ begin
+  FLoadError:='Streamed (large) images are read-only and cannot be saved.';
+  exit;
+ end;
  //Validate the filename
  ext:=ExtractFileExt(filename); //First extract the extension
  if ext='' then //If it hasn't been given an extension, then give it the default
@@ -372,6 +396,8 @@ Closes an image file
 -------------------------------------------------------------------------------}
 procedure TDiscImage.Close;
 begin
+ //Release any streamed backing store (and temp file) before resetting
+ CloseStream;
  ResetVariables;
 end;
 

@@ -514,6 +514,12 @@ begin
   offset:=DiscAddrToIntOffset(offset);
   //Compensate for emulator header
   inc(offset,emuheader);
+  //Streamed (read-only) mode: read on demand from the backing file
+  if FStreamed then
+  begin
+   if(offset>=0)and(offset<FBackSize)then Result:=ReadByteBackend(offset);
+   exit;
+  end;
   //If we are inside the data, read the byte
   if(offset>=0)and(offset<Length(Fdata))then Result:=Fdata[offset];
  end;
@@ -663,6 +669,8 @@ procedure TDiscImage.WriteByte(value: Byte; offset: Int64;var buffer: TDIByteArr
 begin
  if buffer=nil then
  begin
+  //Streamed images are opened read-only - never write to the backing file
+  if FStreamed then exit;
   //Compensate for interleaving (ADFS L & AFS)
   offset:=DiscAddrToIntOffset(offset);
   //Compensate for emulator header
@@ -682,7 +690,7 @@ Gets the length of the data
 -------------------------------------------------------------------------------}
 function TDiscImage.GetDataLength: Int64;
 begin
- Result:=Length(Fdata);
+ if FStreamed then Result:=FBackSize else Result:=Length(Fdata);
 end;
 
 {-------------------------------------------------------------------------------
@@ -690,7 +698,155 @@ Sets the length of the data
 -------------------------------------------------------------------------------}
 procedure TDiscImage.SetDataLength(newlen: Int64);
 begin
+ //Allocating an in-RAM buffer means we are leaving streamed (read-only) mode -
+ //this is how the format/new-image routines take ownership of the data.
+ if FStreamed then CloseStream;
  SetLength(Fdata,newlen);
+end;
+
+{-------------------------------------------------------------------------------
+Read a byte directly from the backing file, via a windowed page cache.
+Used only in streamed (read-only) mode. Keeps a small, bounded amount of the
+image resident (diStreamPageCount * diStreamPageSize) regardless of image size.
+-------------------------------------------------------------------------------}
+function TDiscImage.ReadByteBackend(offset: Int64): Byte;
+var
+ page : Int64;
+ slot : Integer;
+ lru  : Integer;
+ i    : Integer;
+ cnt  : Integer;
+begin
+ Result:=$FF;
+ if(FBackStream=nil)or(Length(FPageCache)=0)then exit;
+ //Page-aligned base address of the byte we want
+ page:=offset and not(Int64(diStreamPageSize-1));
+ //Look for the page in the cache, tracking the least recently used slot
+ slot:=-1;
+ lru :=0;
+ for i:=0 to Length(FPageCache)-1 do
+ begin
+  if FPageCache[i].Tag=page then begin slot:=i; break; end;
+  if FPageCache[i].LastUse<FPageCache[lru].LastUse then lru:=i;
+ end;
+ //Not resident - load it into the least recently used slot
+ if slot=-1 then
+ begin
+  slot:=lru;
+  //How much of the page actually exists in the file
+  cnt:=diStreamPageSize;
+  if FBackSize-page<cnt then cnt:=FBackSize-page;
+  try
+   FBackStream.Position:=page;
+   if cnt>0 then FBackStream.Read(FPageCache[slot].Data[0],cnt);
+  except
+   //Read failure - mark the slot empty and bail out
+   FPageCache[slot].Tag:=-1;
+   exit;
+  end;
+  //Zero any tail beyond the end of the file so stale data isn't returned
+  for i:=cnt to diStreamPageSize-1 do FPageCache[slot].Data[i]:=0;
+  FPageCache[slot].Tag:=page;
+ end;
+ //Touch for LRU and return the requested byte
+ inc(FPageClock);
+ FPageCache[slot].LastUse:=FPageClock;
+ Result:=FPageCache[slot].Data[offset-page];
+end;
+
+{-------------------------------------------------------------------------------
+Decide whether an image of the given size should be streamed from disc rather
+than loaded entirely into RAM.
+-------------------------------------------------------------------------------}
+function TDiscImage.ShouldStream(filesize: Int64): Boolean;
+begin
+ //Beyond the 32-bit addressable range it must be streamed
+ if filesize>=$100000000 then exit(True);
+ //Otherwise stream when at/above the configured threshold (0 disables this)
+ Result:=(FStreamThreshold>0)and(filesize>=FStreamThreshold);
+end;
+
+{-------------------------------------------------------------------------------
+Open an image for streamed (read-only) access, leaving Fdata empty.
+-------------------------------------------------------------------------------}
+function TDiscImage.OpenStreamed(filename: String): Boolean;
+var
+ i: Integer;
+begin
+ Result:=False;
+ try
+  FBackStream:=TFileStream.Create(filename,fmOpenRead or fmShareDenyNone);
+ except
+  FBackStream:=nil;
+  exit;
+ end;
+ FBackSize:=FBackStream.Size;
+ FStreamed:=True;
+ //No in-RAM copy is held
+ SetLength(Fdata,0);
+ //Initialise the windowed page cache
+ SetLength(FPageCache,diStreamPageCount);
+ for i:=0 to diStreamPageCount-1 do
+ begin
+  SetLength(FPageCache[i].Data,diStreamPageSize);
+  FPageCache[i].Tag    :=-1;
+  FPageCache[i].LastUse:=0;
+ end;
+ FPageClock:=0;
+ Result:=True;
+end;
+
+{-------------------------------------------------------------------------------
+Release the streamed backing store (if any) and return to in-RAM mode.
+-------------------------------------------------------------------------------}
+procedure TDiscImage.CloseStream;
+begin
+ if FBackStream<>nil then FreeAndNil(FBackStream);
+ SetLength(FPageCache,0);
+ FStreamed:=False;
+ FBackSize:=0;
+ //Remove any temporary (decompressed) file we created
+ if FBackTemp<>'' then
+ begin
+  if SysUtils.FileExists(FBackTemp) then SysUtils.DeleteFile(FBackTemp);
+  FBackTemp:='';
+ end;
+end;
+
+{-------------------------------------------------------------------------------
+Peek at a file's first bytes to see if it is GZip compressed
+-------------------------------------------------------------------------------}
+function TDiscImage.FileStartsGZip(filename: String): Boolean;
+var
+ F     : TFileStream=nil;
+ sig   : array[0..2] of Byte=(0,0,0);
+begin
+ Result:=False;
+ try
+  F:=TFileStream.Create(filename,fmOpenRead or fmShareDenyNone);
+  if F.Size>=3 then Result:=F.Read(sig[0],3)=3;
+ except
+  Result:=False;
+ end;
+ if F<>nil then F.Free;
+ Result:=Result and(sig[0]=$1F)and(sig[1]=$8B)and(sig[2]=$08);
+end;
+
+{-------------------------------------------------------------------------------
+Return the size of a file, in bytes (0 if it cannot be opened)
+-------------------------------------------------------------------------------}
+function TDiscImage.SizeOfFile(filename: String): Int64;
+var
+ F: TFileStream=nil;
+begin
+ Result:=0;
+ try
+  F:=TFileStream.Create(filename,fmOpenRead or fmShareDenyNone);
+  Result:=F.Size;
+ except
+  Result:=0;
+ end;
+ if F<>nil then F.Free;
 end;
 
 {-------------------------------------------------------------------------------

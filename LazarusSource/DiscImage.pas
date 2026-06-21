@@ -166,6 +166,10 @@ type
   diFSMDir     = $FD;
   diFSMSystem  = $FE;
   diFSMUsed    = $FF;
+  //Streamed (read-only) backend - windowed page cache
+  diStreamPageSize  = 65536;     //64 KB per cache page
+  diStreamPageCount = 64;        //Number of cache pages (~4 MB resident)
+  diStreamThreshold = $80000000; //2 GiB - default streamed-load size threshold
 
  //TSpark class definition
  type
@@ -374,12 +378,26 @@ type
   end;
   //To collate fragments (ADFS/CDR/Amiga/AFS)
   TFragmentArray= array of TFragment;
+  //A single resident page of the streamed (read-only) backend cache
+  TDIPage       = record
+   Tag          : Int64;        //Page-aligned file offset, -1 when the slot is empty
+   LastUse      : QWord;        //FPageClock value when last accessed (for LRU eviction)
+   Data         : TDIByteArray; //diStreamPageSize bytes of image data
+  end;
   //Provides feedback
   TProgressProc = procedure(Fupdate: String) of Object;
  private
   FDisc         : TDisc;        //Container for the entire catalogue
   FPartitions   : TPartitions;  //Container for the entire catalogue (partitioned)
   Fdata         : TDIByteArray; //Container for the image to be loaded into
+  //Streamed (read-only) backend - used when the image is too large for RAM
+  FStreamed     : Boolean;      //True when the image is served from the file on demand
+  FBackStream   : TFileStream;  //Backing file, kept open for the image lifetime
+  FBackSize     : Int64;        //Authoritative image length when streamed
+  FBackTemp     : String;       //Temp file to delete on close ('' if none)
+  FPageCache    : array of TDIPage; //Windowed read-through cache (streamed mode)
+  FPageClock    : QWord;        //Monotonic counter driving LRU eviction
+  FStreamThreshold: Int64;      //Size at/above which images are streamed (0=never)
   FDSD,                         //Double sided flag (Acorn DFS)
   FMap,                         //Old/New Map flag (Acorn ADFS) OFS/FFS (Amiga)
   FBootBlock,                   //Is disc an AmigaDOS Kickstart?
@@ -503,6 +521,12 @@ type
                                       bigendian: Boolean=False): Word; overload;
   function ReadByte(offset: Int64): Byte;
   function ReadByte(offset: Int64; var buffer: TDIByteArray): Byte; overload;
+  function ReadByteBackend(offset: Int64): Byte;
+  function ShouldStream(filesize: Int64): Boolean;
+  function OpenStreamed(filename: String): Boolean;
+  procedure CloseStream;
+  function FileStartsGZip(filename: String): Boolean;
+  function SizeOfFile(filename: String): Int64;
   procedure RemoveDirectory(dirref: Cardinal);
   function DiscAddrToIntOffset(disc_addr: Int64): Int64;
   procedure Write32b(value: Cardinal; offset: Int64; bigendian: Boolean=False);
@@ -1088,6 +1112,9 @@ type
   property RootName:            String        read root_name;
   property ScanSubDirs:         Boolean       read FScanSubDirs
                                               write FScanSubDirs;
+  property Streamed:            Boolean       read FStreamed;
+  property StreamThreshold:     Int64         read FStreamThreshold
+                                              write FStreamThreshold;
   property Sectors:             Byte          read secspertrack;
   property SparkAsFS:           Boolean       read FSparkAsFS
                                               write FSparkAsFS;
