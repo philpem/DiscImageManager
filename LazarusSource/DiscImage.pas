@@ -527,6 +527,8 @@ type
   procedure CloseStream;
   function FileStartsGZip(filename: String): Boolean;
   function SizeOfFile(filename: String): Int64;
+  function CountGZipMembers(filename: String): Integer;
+  function InflateGZipToFile(srcfile,destfile: String): Boolean;
   procedure RemoveDirectory(dirref: Cardinal);
   function DiscAddrToIntOffset(disc_addr: Int64): Int64;
   procedure Write32b(value: Cardinal; offset: Int64; bigendian: Boolean=False);

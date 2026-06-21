@@ -166,6 +166,8 @@ end;
 Load an image from a file, unGZIPping it, if necessary
 -------------------------------------------------------------------------------}
 function TDiscImage.LoadFromFile(filename: String;readdisc: Boolean=True): Boolean;
+var
+ Ltemp: String='';
 begin
  Result:=False;
  //Clear any previous load error (not reset by ResetVariables so it survives
@@ -182,18 +184,50 @@ begin
   if GetMajorFormatNumber=diSpark then SparkFile.Free;
   //Blank off the variables
   ResetVariables;
-  //Large, uncompressed images are streamed from disc on demand rather than
-  //loaded entirely into RAM (which would exhaust memory and overflow the
-  //32-bit addressing). Compressed images can't be streamed by offset, so
-  //they still go through Inflate.
-  if(not FileStartsGZip(filename))and ShouldStream(SizeOfFile(filename))then
+  //Large images are streamed from disc on demand rather than loaded entirely
+  //into RAM (which would exhaust memory and overflow the 32-bit addressing).
+  if FileStartsGZip(filename)then
   begin
-   if not OpenStreamed(filename)then
-    FLoadError:='Unable to open the image for streamed access.';
+   //A compressed image can't be streamed by offset. If it is a single member,
+   //decompress it to a temp file (in bounded memory) and stream that when it
+   //is large enough; otherwise fall back to the in-RAM Inflate.
+   if CountGZipMembers(filename)=1 then
+   begin
+    Ltemp:=GetTempFileName;
+    if InflateGZipToFile(filename,Ltemp)then
+    begin
+     if ShouldStream(SizeOfFile(Ltemp))then
+     begin
+      FBackTemp:=Ltemp; //Streamed from the temp file; deleted on close
+      if not OpenStreamed(Ltemp)then
+       FLoadError:='Unable to open the image for streamed access.';
+     end
+     else
+     begin
+      //Small enough - the temp file is already the raw image, load it in
+      FData:=Inflate(Ltemp);
+      if SysUtils.FileExists(Ltemp)then SysUtils.DeleteFile(Ltemp);
+     end;
+    end
+    else
+    begin
+     if SysUtils.FileExists(Ltemp)then SysUtils.DeleteFile(Ltemp);
+     FData:=Inflate(filename); //Decompression failed - try the original path
+    end;
+   end
+   else
+    FData:=Inflate(filename); //Multi-member archive - existing in-RAM path
   end
   else
-   //Read the file in, uncompressing if need be
-   FData:=Inflate(filename);
+   if ShouldStream(SizeOfFile(filename))then
+   begin
+    //Uncompressed and large - stream directly from the image file
+    if not OpenStreamed(filename)then
+     FLoadError:='Unable to open the image for streamed access.';
+   end
+   else
+    //Read the file in
+    FData:=Inflate(filename);
   //ID the image
   if(IDImage)and(readdisc)then ReadImage;
   //Return a true or false, depending on if FFormat is set.

@@ -733,9 +733,9 @@ begin
  if slot=-1 then
  begin
   slot:=lru;
-  //How much of the page actually exists in the file
+  //How much of the page actually exists in the file (always <= page size)
   cnt:=diStreamPageSize;
-  if FBackSize-page<cnt then cnt:=FBackSize-page;
+  if FBackSize-page<cnt then cnt:=Integer(FBackSize-page);
   try
    FBackStream.Position:=page;
    if cnt>0 then FBackStream.Read(FPageCache[slot].Data[0],cnt);
@@ -847,6 +847,70 @@ begin
   Result:=0;
  end;
  if F<>nil then F.Free;
+end;
+
+{-------------------------------------------------------------------------------
+Count the number of GZip members in a file, by scanning for the signature.
+Streamed (bounded memory) so it works on large compressed files. Uses the same
+'1F 8B 08' heuristic as Inflate, so routing stays consistent.
+-------------------------------------------------------------------------------}
+function TDiscImage.CountGZipMembers(filename: String): Integer;
+var
+ F     : TFileStream=nil;
+ buf   : array of Byte=nil;
+ n     : Integer=0;
+ i     : Integer=0;
+ prev1 : Integer=-1; //Previous byte
+ prev2 : Integer=-1; //Byte before that
+const
+ chunk = 65536;
+begin
+ Result:=0;
+ try
+  F:=TFileStream.Create(filename,fmOpenRead or fmShareDenyNone);
+  SetLength(buf,chunk);
+  repeat
+   n:=F.Read(buf[0],chunk);
+   for i:=0 to n-1 do
+   begin
+    if(prev2=$1F)and(prev1=$8B)and(buf[i]=$08)then inc(Result);
+    prev2:=prev1;
+    prev1:=buf[i];
+   end;
+  until n<chunk;
+ except
+ end;
+ if F<>nil then F.Free;
+end;
+
+{-------------------------------------------------------------------------------
+Decompress a single-member GZip file straight to another file, in chunks, so
+no more than a chunk is held in memory at once. Returns False on failure.
+-------------------------------------------------------------------------------}
+function TDiscImage.InflateGZipToFile(srcfile,destfile: String): Boolean;
+var
+ GZ  : TGZFileStream=nil;
+ FO  : TFileStream=nil;
+ buf : array of Byte=nil;
+ cnt : Integer=0;
+const
+ chunk = 65536;
+begin
+ Result:=False;
+ SetLength(buf,chunk);
+ try
+  GZ:=TGZFileStream.Create(srcfile,gzOpenRead);
+  FO:=TFileStream.Create(destfile,fmCreate);
+  repeat
+   cnt:=GZ.Read(buf[0],chunk);
+   if cnt>0 then FO.Write(buf[0],cnt);
+  until cnt<chunk;
+  Result:=True;
+ except
+  Result:=False;
+ end;
+ if GZ<>nil then GZ.Free;
+ if FO<>nil then FO.Free;
 end;
 
 {-------------------------------------------------------------------------------
