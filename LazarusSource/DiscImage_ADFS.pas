@@ -820,11 +820,16 @@ begin
      id:=ReadBits(start,i,idlen);
      //and move the pointer on idlen bits
      inc(i,idlen);
-     //Now find the end of the fragment entry
-     j:=i-1;
-     repeat
-      inc(j);
-     until(IsBitSet(ReadByte(start+(j div 8)),j mod 8))or(j>=allmap);
+     //Now find the end of the fragment entry.
+     //Byte-at-a-time scan (up to 8x faster than bit-by-bit for large allocations):
+     //  Phase 1: bit-by-bit until byte-aligned (at most 7 bits)
+     //  Phase 2: skip zero bytes 8 bits at a time
+     //  Phase 3: bit-by-bit within the last non-zero byte (at most 8 bits)
+     j:=i;
+     while(j<allmap)and((j and 7)<>0)
+          and not IsBitSet(ReadByte(start+(j shr 3)),j and 7)do inc(j);
+     while(j<allmap)and((j and 7)=0)and(ReadByte(start+(j shr 3))=0)do inc(j,8);
+     while(j<allmap)and not IsBitSet(ReadByte(start+(j shr 3)),j and 7)do inc(j);
      //Make a note of the length
      if offset then
       len:=((j-i)+1+idlen)*bpmb
