@@ -480,6 +480,8 @@ type
    Fdebug              :Boolean;
    //Allow DFS images with zero number of sectors
    FDFSZeroSecs        :Boolean;
+   //Tolerate ADFS filesystem damage and recover what is possible
+   FAllowDamagedADFS   :Boolean;
    //Check for files going beyond the disc edge on DFS
    FDFSBeyondEdge      :Boolean;
    //Check for blank filenames
@@ -1703,6 +1705,8 @@ begin
  Image.SparkAsFS           :=SparkIsFS;
  //Allow DFS to have zero number of sectors
  Image.AllowDFSZeroSectors :=FDFSZeroSecs;
+ //Tolerate ADFS filesystem damage
+ Image.AllowDamagedADFS    :=FAllowDamagedADFS;
  //Check for files going over the disc edge on DFS
  Image.DFSBeyondEdge       :=FDFSBeyondEdge;
  //Check for blank filenames in DFS
@@ -3262,6 +3266,9 @@ begin
  //Allow DFS images with zero sectors
  FDFSZeroSecs              :=DIMReg.GetRegValB('DFS_Zero_Sectors',False);
  Image.AllowDFSZeroSectors :=FDFSZeroSecs;
+ //Tolerate ADFS filesystem damage
+ FAllowDamagedADFS         :=DIMReg.GetRegValB('Allow_Damaged_ADFS',False);
+ Image.AllowDamagedADFS    :=FAllowDamagedADFS;
  //Check for files going over the DFS disc edge
  FDFSBeyondEdge            :=DIMReg.GetRegValB('DFS_Beyond_Edge',False);
  Image.DFSBeyondEdge       :=FDFSBeyondEdge;
@@ -3502,6 +3509,7 @@ begin
  NewImage.InterleaveMethod    :=ADFSInterleave;
  NewImage.SparkAsFS           :=SparkIsFS;
  NewImage.AllowDFSZeroSectors :=FDFSZeroSecs;
+ NewImage.AllowDamagedADFS    :=FAllowDamagedADFS;
  NewImage.DFSBeyondEdge       :=FDFSBeyondEdge;
  NewImage.DFSAllowBlanks      :=FDFSAllowBlank;
  NewImage.ScanSubDirs         :=True;
@@ -5376,6 +5384,7 @@ begin
  SettingsForm.ImpliedAttr.Ticked           :=AddImpliedAttributes;
  SettingsForm.WriteDebug.Ticked            :=Fdebug;
  SettingsForm.AllowDFSZeroSecs.Ticked      :=FDFSZeroSecs;
+ SettingsForm.AllowDamagedADFS.Ticked     :=FAllowDamagedADFS;
  SettingsForm.DFSBeyondEdge.Ticked         :=FDFSBeyondEdge;
  SettingsForm.AllowDFSBlankFilenames.Ticked:=FDFSAllowBlank;
  SettingsForm.CompressUEF.Ticked           :=FUEFCompress;
@@ -5403,6 +5412,7 @@ begin
   AddImpliedAttributes:=SettingsForm.ImpliedAttr.Ticked;
   Fdebug              :=SettingsForm.WriteDebug.Ticked;
   FDFSZeroSecs        :=SettingsForm.AllowDFSZeroSecs.Ticked;
+  FAllowDamagedADFS   :=SettingsForm.AllowDamagedADFS.Ticked;
   FDFSBeyondEdge      :=SettingsForm.DFSBeyondEdge.Ticked;
   FDFSAllowBlank      :=SettingsForm.AllowDFSBlankFilenames.Ticked;
   FUEFCompress        :=SettingsForm.CompressUEF.Ticked;
@@ -5521,6 +5531,7 @@ begin
  DIMReg.GetRegValB('AddImpliedAttributes',AddImpliedAttributes);
  DIMReg.SetRegValB('Debug_Mode',          Fdebug);
  DIMReg.SetRegValB('DFS_Zero_Sectors',    FDFSZeroSecs);
+ DIMReg.SetRegValB('Allow_Damaged_ADFS', FAllowDamagedADFS);
  DIMReg.SetRegValB('DFS_Beyond_Edge',     FDFSBeyondEdge);
  DIMReg.SetRegValB('DFS_Allow_Blanks',    FDFSAllowBlank);
  DIMReg.SetRegValB('Scan_SubDirs',        FScanSubDirs);

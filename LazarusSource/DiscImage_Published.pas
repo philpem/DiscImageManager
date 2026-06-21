@@ -32,6 +32,8 @@ begin
  FDOSUseSFN           :=False;
  //Open DOS Partitions on ADFS
  FOpenDOSPart         :=True;
+ //Attempt to recover data from damaged ADFS images
+ FAllowDamagedADFS    :=False;
  //Add implied attributes for DFS/CFS/RFS
  FAddImpliedAttributes:=True;
  //Set the titles
@@ -67,6 +69,8 @@ begin
  FDOSUseSFN           :=Clone.FDOSUseSFN;
  //Open DOS Partitions on ADFS
  FOpenDOSPart         :=Clone.OpenDOSPartitions;
+ //Attempt to recover data from damaged ADFS images
+ FAllowDamagedADFS    :=Clone.AllowDamagedADFS;
  //Add implied attributes for DFS/CFS/RFS
  FAddImpliedAttributes:=Clone.AddImpliedAttributes;
  //Set the titles
@@ -1963,6 +1967,22 @@ begin
   if report.Count>0 then
    for side:=0 to report.Count-1 do Result.Add(report[side]);
   report.Free;
+  //Append damage messages, if any
+  if FDamaged then
+  begin
+   if not CSV then
+   begin
+    Result.Add('');
+    Result.Add('Damaged Filesystem');
+    Result.Add('==================');
+   end;
+   for side:=0 to Length(FDamageReport)-1 do
+    if CSV then
+     Result.Add('"Damage","'
+               +StringReplace(FDamageReport[side],'"','""',[])+'"')
+    else
+     Result.Add('Damage: '+FDamageReport[side]);
+  end;
   //Re-jig the output if CSV has been specified
   if(CSV)and(Result.Count>0)then
    for side:=0 to Result.Count-1 do

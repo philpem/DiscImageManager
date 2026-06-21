@@ -50,6 +50,7 @@ type
     FDFSAllowBlank: Boolean;
     FSparkIsFS: Boolean;
     FADFSInterleave: Byte;
+    FAllowDamagedADFS: Boolean;
     procedure ApplySettings;
   public
     constructor Create;
@@ -81,6 +82,7 @@ type
     property DFSAllowBlank: Boolean read FDFSAllowBlank write FDFSAllowBlank;
     property SparkIsFS: Boolean read FSparkIsFS write FSparkIsFS;
     property ADFSInterleave: Byte read FADFSInterleave write FADFSInterleave;
+    property AllowDamagedADFS: Boolean read FAllowDamagedADFS write FAllowDamagedADFS;
   end;
 
   { TRegistrySettings - Cross-platform settings storage }
@@ -151,6 +153,7 @@ begin
   FDFSAllowBlank := False;
   FSparkIsFS := True;
   FADFSInterleave := 0;
+  FAllowDamagedADFS := False;
   ApplySettings;
 end;
 
@@ -173,6 +176,7 @@ begin
     FImage.DFSAllowBlanks := FDFSAllowBlank;
     FImage.SparkAsFS := FSparkIsFS;
     FImage.InterleaveMethod := FADFSInterleave;
+    FImage.AllowDamagedADFS := FAllowDamagedADFS;
   end;
 end;
 
