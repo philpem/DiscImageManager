@@ -1739,9 +1739,14 @@ begin
   ShowNewImage(Image.Filename);
  end
  else
-  ReportError('"'+ExtractFilename(filename)
-                 +'" has not been recognised as a valid disc image that '
-                 +ApplicationTitle+' can open.');
+  if Image.LoadErrorMessage<>'' then
+   //A specific reason was given (e.g. the image is too large for memory)
+   ReportError('"'+ExtractFilename(filename)+'" could not be opened. '
+                  +Image.LoadErrorMessage)
+  else
+   ReportError('"'+ExtractFilename(filename)
+                  +'" has not been recognised as a valid disc image that '
+                  +ApplicationTitle+' can open.');
  //Close the progress message
  ProgressForm.Hide;
 end;

@@ -965,8 +965,19 @@ begin
  //Read in the entire file
  try
   F:=TFileStream.Create(filename,fmOpenRead or fmShareDenyNone);
-  SetLength(buffer,F.Size);
-  F.Read(buffer[0],F.Size);
+  try
+   SetLength(buffer,F.Size);
+   F.Read(buffer[0],F.Size);
+  except
+   //Most likely the image is too large to fit into available memory
+   on EOutOfMemory do
+   begin
+    FLoadError:='The image is too large to load into memory ('
+               +IntToStr(F.Size)+' bytes).';
+    F.Free;
+    exit;
+   end;
+  end;
  except
   on Exception do
   begin

@@ -162,6 +162,9 @@ Load an image from a file, unGZIPping it, if necessary
 function TDiscImage.LoadFromFile(filename: String;readdisc: Boolean=True): Boolean;
 begin
  Result:=False;
+ //Clear any previous load error (not reset by ResetVariables so it survives
+ //the ResetVariables call inside IDImage)
+ FLoadError:='';
  //Only read the file in if it actually exists (or rather, Windows can find it)
  if SysUtils.FileExists(filename) then
  begin

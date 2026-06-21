@@ -450,6 +450,7 @@ type
   root_name,                    //Root title
   dosrootname,                  //DOS Plus root name
   imagefilename,                //Filename of the disc image
+  FLoadError,                   //Reason the last load failed (e.g. too large)
   FFilename     : String;       //Copy of above, but doesn't get wiped
   dir_sep       : Char;         //Directory Separator
   free_space_map: TSide;        //Free Space Map
@@ -1075,6 +1076,7 @@ type
   property MajorFormatNumber:   Word          read GetMajorFormatNumber;
   property MapType:             Byte          read MapFlagToByte;
   property MapTypeString:       String        read MapTypeToString;
+  property LoadErrorMessage:    String        read FLoadError;
   property MaxDirectoryEntries: Cardinal      read FMaxDirEnt;
   property MinorFormatNumber:   Byte          read GetMinorFormatNumber;
   property OpenDOSPartitions:   Boolean       read FOpenDOSPart
