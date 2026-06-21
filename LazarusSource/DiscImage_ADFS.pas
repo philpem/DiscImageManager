@@ -762,7 +762,7 @@ var
  allmap: Cardinal;
  start : Cardinal;
  id    : Cardinal;
- off   : Cardinal;
+ off   : Int64;   //Byte offset into the image (can exceed 4GB on large discs)
  len   : Cardinal;
  n     : Integer;
 begin
@@ -790,7 +790,7 @@ begin
    i:=j;
    if id>0 then
    begin
-    off:=((off-(zone_spare*zone))*bpmb) mod disc_size[0];
+    off:=((off-(zone_spare*zone))*Int64(bpmb)) mod Int64(disc_size[0]);
     n:=Length(FBitmapIndex[id]);
     SetLength(FBitmapIndex[id],n+1);
     FBitmapIndex[id][n].Offset:=off;
@@ -815,7 +815,7 @@ var
  id          : Cardinal=0;
  allmap      : Cardinal=0;
  len         : Cardinal=0;
- off         : Cardinal=0;
+ off         : Int64=0;   //Byte offset into the image (can exceed 4GB)
  zone        : Cardinal=0;
  start       : Cardinal=0;
  start_zone  : Cardinal=0;
@@ -906,7 +906,7 @@ begin
      if id=fragid then
      begin
       if offset then //Offset as image file offset
-       off:=((off-(zone_spare*zone))*bpmb) mod disc_size[0]
+       off:=((off-(zone_spare*zone))*Int64(bpmb)) mod Int64(disc_size[0])
       else //Offset as number of bits from start of zone
        begin
         //Add the disc record (we are counting from the zone start
@@ -3820,7 +3820,7 @@ function TDiscImage.ExtractFragmentedData(fragments: TFragmentArray;
 var
  dest   : Cardinal=0;
  len    : Cardinal=0;
- source : Cardinal=0;
+ source : Int64=0; //Byte offset into the image (can exceed 4GB)
  frag   : Cardinal=0; //Pointer into the fragment array
 begin
  Result:=False;

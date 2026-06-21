@@ -776,7 +776,10 @@ begin
        Fcurrdir:=0;
        ReportFreeSpace;
       end
-      else WriteLn(cmdRed+'Image not read.'+cmdNormal);
+      else
+       if Image.LoadErrorMessage<>'' then
+        WriteLn(cmdRed+'Image not read. '+Image.LoadErrorMessage+cmdNormal)
+       else WriteLn(cmdRed+'Image not read.'+cmdNormal);
      end
      else WriteLn(cmdRed+'File not found.'+cmdNormal)
     else error:=2;
