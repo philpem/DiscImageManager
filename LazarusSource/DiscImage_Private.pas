@@ -413,7 +413,7 @@ end;
 {-------------------------------------------------------------------------------
 Read in 4 bytes (word)
 -------------------------------------------------------------------------------}
-function TDiscImage.Read32b(offset: Cardinal; bigendian: Boolean=False): Cardinal;
+function TDiscImage.Read32b(offset: Int64; bigendian: Boolean=False): Cardinal;
 var
  buffer: TDIByteArray=nil;
 begin
@@ -421,7 +421,7 @@ begin
  SetLength(buffer,0);
  Result:=Read32b(offset,buffer,bigendian);
 end;
-function TDiscImage.Read32b(offset: Cardinal;var buffer: TDIByteArray;
+function TDiscImage.Read32b(offset: Int64;var buffer: TDIByteArray;
                                   bigendian: Boolean=False): Cardinal;
 var
  i: Cardinal=0;
@@ -440,7 +440,7 @@ end;
 {-------------------------------------------------------------------------------
 Read in 3 bytes
 -------------------------------------------------------------------------------}
-function TDiscImage.Read24b(offset: Cardinal; bigendian: Boolean=False): Cardinal;
+function TDiscImage.Read24b(offset: Int64; bigendian: Boolean=False): Cardinal;
 var
  buffer: TDIByteArray=nil;
 begin
@@ -448,7 +448,7 @@ begin
  SetLength(buffer,0);
  Result:=Read24b(offset,buffer,bigendian);
 end;
-function TDiscImage.Read24b(offset: Cardinal;var buffer: TDIByteArray;
+function TDiscImage.Read24b(offset: Int64;var buffer: TDIByteArray;
                                   bigendian: Boolean=False): Cardinal;
 var
  i: Cardinal=0;
@@ -467,7 +467,7 @@ end;
 {-------------------------------------------------------------------------------
 Read in 2 bytes
 -------------------------------------------------------------------------------}
-function TDiscImage.Read16b(offset: Cardinal; bigendian: Boolean=False): Word;
+function TDiscImage.Read16b(offset: Int64; bigendian: Boolean=False): Word;
 var
  buffer: TDIByteArray=nil;
 begin
@@ -475,7 +475,7 @@ begin
  SetLength(buffer,0);
  Result:=Read16b(offset,buffer,bigendian);
 end;
-function TDiscImage.Read16b(offset: Cardinal;var buffer: TDIByteArray;
+function TDiscImage.Read16b(offset: Int64;var buffer: TDIByteArray;
                                   bigendian: Boolean=False): Word;
 var
  i: Cardinal=0;
@@ -494,7 +494,7 @@ end;
 {-------------------------------------------------------------------------------
 Read in a byte
 -------------------------------------------------------------------------------}
-function TDiscImage.ReadByte(offset: Cardinal): Byte;
+function TDiscImage.ReadByte(offset: Int64): Byte;
 var
  buffer: TDIByteArray=nil;
 begin
@@ -502,11 +502,11 @@ begin
  SetLength(buffer,0);
  Result:=ReadByte(offset,buffer);
 end;
-function TDiscImage.ReadByte(offset: Cardinal;var buffer: TDIByteArray): Byte;
+function TDiscImage.ReadByte(offset: Int64;var buffer: TDIByteArray): Byte;
 begin
  Result:=$FF;
  if buffer<>nil then
-  if offset<Length(buffer) then Result:=buffer[offset];
+  if(offset>=0)and(offset<Length(buffer))then Result:=buffer[offset];
  //If no buffer has been passed, resort to the standard function
  if buffer=nil then
  begin
@@ -515,14 +515,14 @@ begin
   //Compensate for emulator header
   inc(offset,emuheader);
   //If we are inside the data, read the byte
-  if offset<Length(Fdata) then Result:=Fdata[offset];
+  if(offset>=0)and(offset<Length(Fdata))then Result:=Fdata[offset];
  end;
 end;
 
 {-------------------------------------------------------------------------------
 Calculate offset into image given the disc address (Interleaved or Multiplexed)
 -------------------------------------------------------------------------------}
-function TDiscImage.DiscAddrToIntOffset(disc_addr: Cardinal): Cardinal;
+function TDiscImage.DiscAddrToIntOffset(disc_addr: Int64): Int64;
 var
  track_size : Cardinal=0;
  track      : Cardinal=0;
@@ -574,7 +574,7 @@ end;
 {-------------------------------------------------------------------------------
 Write 4 bytes (word)
 -------------------------------------------------------------------------------}
-procedure TDiscImage.Write32b(value, offset: Cardinal; bigendian: Boolean=False);
+procedure TDiscImage.Write32b(value: Cardinal; offset: Int64; bigendian: Boolean=False);
 var
  buffer: TDIByteArray=nil;
 begin
@@ -582,7 +582,7 @@ begin
  SetLength(buffer,0);
  Write32b(value,offset,buffer,bigendian);
 end;
-procedure TDiscImage.Write32b(value, offset: Cardinal;var buffer: TDIByteArray;
+procedure TDiscImage.Write32b(value: Cardinal; offset: Int64;var buffer: TDIByteArray;
                                   bigendian: Boolean=False);
 var
  i: Cardinal=0;
@@ -600,7 +600,7 @@ end;
 {-------------------------------------------------------------------------------
 Write 3 bytes
 -------------------------------------------------------------------------------}
-procedure TDiscImage.Write24b(value,offset: Cardinal; bigendian: Boolean=False);
+procedure TDiscImage.Write24b(value: Cardinal; offset: Int64; bigendian: Boolean=False);
 var
  buffer: TDIByteArray=nil;
 begin
@@ -608,7 +608,7 @@ begin
  SetLength(buffer,0);
  Write24b(value,offset,buffer,bigendian);
 end;
-procedure TDiscImage.Write24b(value,offset: Cardinal;var buffer: TDIByteArray;
+procedure TDiscImage.Write24b(value: Cardinal; offset: Int64;var buffer: TDIByteArray;
                                   bigendian: Boolean=False);
 var
  i: Cardinal=0;
@@ -626,7 +626,7 @@ end;
 {-------------------------------------------------------------------------------
 Write 2 bytes
 -------------------------------------------------------------------------------}
-procedure TDiscImage.Write16b(value: Word; offset: Cardinal; bigendian: Boolean=False);
+procedure TDiscImage.Write16b(value: Word; offset: Int64; bigendian: Boolean=False);
 var
  buffer: TDIByteArray=nil;
 begin
@@ -634,7 +634,7 @@ begin
  SetLength(buffer,0);
  Write16b(value,offset,buffer,bigendian);
 end;
-procedure TDiscImage.Write16b(value: Word; offset: Cardinal;var buffer: TDIByteArray;
+procedure TDiscImage.Write16b(value: Word; offset: Int64;var buffer: TDIByteArray;
                                   bigendian: Boolean=False);
 var
  i: Cardinal=0;
@@ -652,14 +652,14 @@ end;
 {-------------------------------------------------------------------------------
 Write byte
 -------------------------------------------------------------------------------}
-procedure TDiscImage.WriteByte(value: Byte; offset: Cardinal);
+procedure TDiscImage.WriteByte(value: Byte; offset: Int64);
 var
  buffer: TDIByteArray=nil;
 begin
  SetLength(buffer,0);
  WriteByte(value,offset,buffer);
 end;
-procedure TDiscImage.WriteByte(value: Byte; offset: Cardinal;var buffer: TDIByteArray);
+procedure TDiscImage.WriteByte(value: Byte; offset: Int64;var buffer: TDIByteArray);
 begin
  if buffer=nil then
  begin
@@ -668,19 +668,19 @@ begin
   //Compensate for emulator header
   inc(offset,emuheader);
   //Will it go beyond the size of the array?
-  if offset<Length(Fdata) then
+  if(offset>=0)and(offset<Length(Fdata))then
    Fdata[offset]:=value; //Write the byte
  end
  else
   //Will it go beyond the size of the array?
-  if offset<Length(buffer) then
+  if(offset>=0)and(offset<Length(buffer))then
    buffer[offset]:=value; //Write the byte
 end;
 
 {-------------------------------------------------------------------------------
 Gets the length of the data
 -------------------------------------------------------------------------------}
-function TDiscImage.GetDataLength: Cardinal;
+function TDiscImage.GetDataLength: Int64;
 begin
  Result:=Length(Fdata);
 end;
@@ -688,7 +688,7 @@ end;
 {-------------------------------------------------------------------------------
 Sets the length of the data
 -------------------------------------------------------------------------------}
-procedure TDiscImage.SetDataLength(newlen: Cardinal);
+procedure TDiscImage.SetDataLength(newlen: Int64);
 begin
  SetLength(Fdata,newlen);
 end;

@@ -822,10 +822,10 @@ end;
 {-------------------------------------------------------------------------------
 Direct access to disc data
 -------------------------------------------------------------------------------}
-function TDiscImage.ReadDiscData(addr,count,side,offset: Cardinal;
+function TDiscImage.ReadDiscData(addr,count: Int64; side: Cardinal; offset: Int64;
                                              var buffer: TDIByteArray): Boolean;
 var
- i      : Cardinal=0;
+ i      : Int64=0;
 begin
  Result:=False;
  if count>0 then //Make sure there is something to read
@@ -853,7 +853,7 @@ end;
 {-------------------------------------------------------------------------------
 Direct access writing to disc
 -------------------------------------------------------------------------------}
-function TDiscImage.WriteDiscData(addr,side: Cardinal;var buffer: TDIByteArray;
+function TDiscImage.WriteDiscData(addr: Int64; side: Cardinal;var buffer: TDIByteArray;
                                     count: Cardinal;start: Cardinal=0): Boolean;
 var
  i   : Cardinal=0;

@@ -368,7 +368,7 @@ type
   TPartitions   = array of TPartition;
   //Fragment
   TFragment     = record        //For retrieving the ADFS E/F fragment information
-   Offset,
+   Offset       : Int64;        //Byte offset into the image (can exceed 4GB)
    Length,
    Zone         : Cardinal;
   end;
@@ -491,33 +491,33 @@ type
                                                 buffer: TDIByteArray); overload;
   function RISCOSToTimeDate(filedatetime: Int64): TDateTime;
   function TimeDateToRISCOS(delphitime: TDateTime): Int64;
-  function Read32b(offset: Cardinal; bigendian: Boolean=False): Cardinal;
-  function Read32b(offset: Cardinal; var buffer: TDIByteArray;
+  function Read32b(offset: Int64; bigendian: Boolean=False): Cardinal;
+  function Read32b(offset: Int64; var buffer: TDIByteArray;
                                   bigendian: Boolean=False): Cardinal; overload;
-  function Read24b(offset: Cardinal; bigendian: Boolean=False): Cardinal;
-  function Read24b(offset: Cardinal; var buffer: TDIByteArray;
+  function Read24b(offset: Int64; bigendian: Boolean=False): Cardinal;
+  function Read24b(offset: Int64; var buffer: TDIByteArray;
                                   bigendian: Boolean=False): Cardinal; overload;
-  function Read16b(offset: Cardinal; bigendian: Boolean=False): Word;
-  function Read16b(offset: Cardinal; var buffer: TDIByteArray;
+  function Read16b(offset: Int64; bigendian: Boolean=False): Word;
+  function Read16b(offset: Int64; var buffer: TDIByteArray;
                                       bigendian: Boolean=False): Word; overload;
-  function ReadByte(offset: Cardinal): Byte;
-  function ReadByte(offset: Cardinal; var buffer: TDIByteArray): Byte; overload;
+  function ReadByte(offset: Int64): Byte;
+  function ReadByte(offset: Int64; var buffer: TDIByteArray): Byte; overload;
   procedure RemoveDirectory(dirref: Cardinal);
-  function DiscAddrToIntOffset(disc_addr: Cardinal): Cardinal;
-  procedure Write32b(value, offset: Cardinal; bigendian: Boolean=False); 
-  procedure Write32b(value, offset: Cardinal; var buffer: TDIByteArray;
+  function DiscAddrToIntOffset(disc_addr: Int64): Int64;
+  procedure Write32b(value: Cardinal; offset: Int64; bigendian: Boolean=False);
+  procedure Write32b(value: Cardinal; offset: Int64; var buffer: TDIByteArray;
                                       bigendian: Boolean=False); overload;
-  procedure Write24b(value, offset: Cardinal; bigendian: Boolean=False);
-  procedure Write24b(value, offset: Cardinal; var buffer: TDIByteArray;
+  procedure Write24b(value: Cardinal; offset: Int64; bigendian: Boolean=False);
+  procedure Write24b(value: Cardinal; offset: Int64; var buffer: TDIByteArray;
                                       bigendian: Boolean=False); overload;
-  procedure Write16b(value: Word; offset: Cardinal; bigendian: Boolean=False);
-  procedure Write16b(value: Word; offset: Cardinal; var buffer: TDIByteArray;
+  procedure Write16b(value: Word; offset: Int64; bigendian: Boolean=False);
+  procedure Write16b(value: Word; offset: Int64; var buffer: TDIByteArray;
                                       bigendian: Boolean=False); overload;
-  procedure WriteByte(value: Byte; offset: Cardinal);
-  procedure WriteByte(value: Byte; offset: Cardinal;
+  procedure WriteByte(value: Byte; offset: Int64);
+  procedure WriteByte(value: Byte; offset: Int64;
                                             var buffer: TDIByteArray); overload;
-  function GetDataLength: Cardinal;
-  procedure SetDataLength(newlen: Cardinal);
+  function GetDataLength: Int64;
+  procedure SetDataLength(newlen: Int64);
   function ROR13(v: Cardinal): Cardinal;
   procedure ResetDir(var Entry: TDir);
   function MapFlagToByte: Byte;
@@ -995,7 +995,7 @@ type
   function MoveFile(filename,directory: String): Integer;
   function MoveFile(source: Cardinal;dest: Integer): Integer; overload;
   function ReadDirectory(dirname: String): Integer;
-  function ReadDiscData(addr,count,side,offset: Cardinal;
+  function ReadDiscData(addr,count: Int64; side: Cardinal; offset: Int64;
                                              var buffer: TDIByteArray): Boolean;
   procedure ReadImage;
   function ReadPasswordFile: TUserAccounts;
@@ -1019,7 +1019,7 @@ type
   function UpdateVersionString(version: String): Boolean;
   procedure ValidateAttributes(var attributes: String);
   function ValidateFilename(parent:String;var filename:String): Boolean;
-  function WriteDiscData(addr,side: Cardinal;var buffer: TDIByteArray;
+  function WriteDiscData(addr: Int64; side: Cardinal;var buffer: TDIByteArray;
                                     count: Cardinal;start: Cardinal=0): Boolean;
   function WriteFile(var file_details: TDirEntry;
                       var buffer: TDIByteArray;ShowFSM: Boolean=False): Integer;
